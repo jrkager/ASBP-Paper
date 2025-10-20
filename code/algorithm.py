@@ -5,7 +5,7 @@ import time, datetime
 import os.path
 import numpy as np
 
-ALG_VERSION = "v7.0"
+ALG_VERSION = "v2"
 
 from heuristics import timelimit_heuristic
 
