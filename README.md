@@ -1,2 +1,2 @@
 # ASBP-Paper
-Code used in "A fast approximate scenario addition method for two-stage robust mixed-integer programs"
+Code used in "A fast approximate column-and-constraint generation method for two-stage robust mixed-integer programs"
