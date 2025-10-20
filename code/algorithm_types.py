@@ -36,6 +36,7 @@ class AlgorithmTypes(Enum):
 
     # Extra
     NONE = 15
+    DISCARD_HEUR_MODEL = 26
 
     def consequence(self) -> InterruptConsequence:
         if self in [self.OTHER_CHOICE, self.NONE,

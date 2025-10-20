@@ -5,7 +5,7 @@ import time, datetime
 import os.path
 import numpy as np
 
-ALG_VERSION = "v6.0"
+ALG_VERSION = "v7.0"
 
 from heuristics import timelimit_heuristic
 
@@ -280,14 +280,6 @@ def opt_and_update_bnd(ssmodels: list[SecondStageModelType], k, UB, LB, cbt, sta
             if not cbt.type.is_set(types.NO_LOWER_BOUND) or ssmodels[k].status == GRB.OPTIMAL:
                 LB[k] = ssmodels[k].objbound # we could also use the same as above (with optimal check), but it is covered in iteration
 
-
-    UB[k] = ssmodels[k].objval
-    if cbt.type.is_set(types.TOENISSEN):
-        if ssmodels[k].status == GRB.OPTIMAL or ssmodels[k].mipgap <= 0.001:
-            LB[k] = UB[k] # sometimes objval and objbound differ quite a bit by the solver, we need them equal.
-    elif not cbt.type.is_set(types.NO_LOWER_BOUND):
-        LB[k] = ssmodels[k].objbound # we could also use the same as above (with optimal check), but it is covered in iteration
-
     if not cbt.type.is_set(types.TOENISSEN):
         filter_and_terminate(ssmodels[k], k, UB, LB, log, cbt)
 
@@ -361,6 +353,8 @@ def init_and_heur(ssmodels, k, dm, UB, LB, D, params: AlgorithmParams, s: Algori
     else:
         LB[k] = lbound
 
+    if cbt.type.is_set(types.DISCARD_HEUR_MODEL):
+        ssmodels[k] = SecondStagePlaceholder(time_over=False, accTime=0, accProctime=0)
 
 def iteration(EPS, LB, UB, cbt : CBTerminationData, dm, log, params, remaining_scenarios, type):
     # we land here only in toenissen and our alg
@@ -548,6 +542,7 @@ def algorithm(params: AlgorithmParams, type: AlgorithmType = None, log_header = 
     EPS = 1e-4
 
     if params.MASTER_P is not None and params.desired_gap < params.MASTER_P:
+        params.MASTER_P = params.desired_gap
         log(f"MASTER_P was adjusted to desired gap {params.desired_gap}.\n")
     if params.MASTER_P is None:
         params.MASTER_P = params.desired_gap
@@ -721,13 +716,19 @@ def rodr_alg_part(D, UB, cbt, dm, k, log, params):
     else:
         # immediately solve the scenario to optimality if it was not kicked by HEUR + zbound
         log(f" - RODR heur {UB[k]:.3f} > zbound {cbt.bound:.3f}\n")
-        second_stage_warmstart = dm.get_second_stage_solution_for_scenario(k)  # is None when k not in D
-        first_stage = dm.get_first_stage_solution()
-        ssm = params.app.SecondStageModel(instance=params.app.inst, k=k,
-                                          first_stage_solution=first_stage,
-                                          warmstart=second_stage_warmstart)
-        cbt.ssmodels[k] = ssm # have to set it so then the runtime will get summed
-        ssm.Params.Threads = params.n_threads
+
+        if isinstance(cbt.ssmodels[k], SecondStagePlaceholder):
+            second_stage_warmstart = dm.get_second_stage_solution_for_scenario(k)  # is None when k not in D
+            first_stage = dm.get_first_stage_solution()
+            ssm = params.app.SecondStageModel(instance=params.app.inst, k=k,
+                                              first_stage_solution=first_stage,
+                                              warmstart=second_stage_warmstart)
+            ssm.Params.Threads = params.n_threads
+            cbt.ssmodels[k] = ssm
+        else:
+            log(f"  - re-use model from timeheuristic\n")
+            ssm = cbt.ssmodels[k]
+            ssm.resetParamsButLogAndThreads()
         ssm.params.TimeLimit = max(0, params.total_timelimit - (time.process_time() - cbt.starttime))
         ssm.optimize()
         UB[k] = ssm.objval
@@ -762,8 +763,12 @@ def toenAlgorithm(params: AlgorithmParams, type: AlgorithmType = None):
     """
     log(f"({ALG_VERSION}) Improved Toenissen on {params.n_threads} threads\n", params)
 
+    alg_types = [types.TOENISSEN]
+    if type is not None:
+        if types.DISCARD_HEUR_MODEL in type.alg_types:
+            alg_types = [types.TOENISSEN, types.DISCARD_HEUR_MODEL]
     type = AlgorithmType(choose_next=[ctypes.HIGHEST_UB],
-                         alg_types=[types.TOENISSEN])
+                         alg_types=alg_types)
 
     log(f"with additional types: {type}\n", params)
 
@@ -779,8 +784,12 @@ def rodrAlgorithm(params: AlgorithmParams, type: AlgorithmType = None):
     """
     log(f"({ALG_VERSION}) Rodrigues on {params.n_threads} threads\n", params)
 
+    alg_types = [types.RODRIGUES]
+    if type is not None:
+        if types.DISCARD_HEUR_MODEL in type.alg_types:
+            alg_types = [types.RODRIGUES, types.DISCARD_HEUR_MODEL]
     type = AlgorithmType(choose_next=[ctypes.HIGHEST_UB],
-                         alg_types=[types.RODRIGUES])
+                         alg_types=alg_types)
     log(f"with additional types: {type}\n", params)
 
     if not params.start_sc:
@@ -812,7 +821,7 @@ def ourAlgorithm(params: AlgorithmParams, type: AlgorithmType = None):
     # set default values for our alg
     if ctypes.HIGHEST_UB not in type.choose_next:
         type.choose_next.insert(0, ctypes.HIGHEST_UB)
-    # itypes.OPTIMAL, itypes.OTHER_CHOICE are not appended because those are used in the algorithm anyways!
+    # types.OPTIMAL, types.OTHER_CHOICE are not appended because those are used in the algorithm anyways!
     for it in [types.ONLY_D, types.D_OPT_IS_WORST, types.ONLY_ONE]:
         if it not in type.alg_types:
             type.alg_types.append(it)

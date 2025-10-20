@@ -118,7 +118,4 @@ class Instance:
 
     @staticmethod
     def createInstance(N, instance=1, K=None, homogeneous=True):
-        scenarios = None
-        if K:
-            scenarios = list(range(1, K+1))
         return Instance(N, instance, homogeneous=homogeneous, max_number_scenarios=K)

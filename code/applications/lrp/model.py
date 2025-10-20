@@ -2,9 +2,10 @@ import gurobipy as gp
 from gurobipy import GRB
 from gurobipy import quicksum
 import numpy as np
+import random
 
-from ..optimization_model import OptimizationModel
-from ...helper import roundBinaryValue, getValueDict
+from applications.optimization_model import OptimizationModel
+from helper import roundBinaryValue, getValueDict
 
 from .instance import Instance
 from .. import SecondStageModelType
@@ -35,9 +36,13 @@ def createSecondStage(instance, k, model, variables):
     x, r, y, s, t = variables
     I, J, V = inst.I, inst.J, inst.V
     J_bar = [j for j in inst.J if instance.beta_k_j[k][j] > 0]
+    J_bar_complement = [j for j in inst.J if j not in J_bar]
 
     model.addConstrs(quicksum(x[k][i, j] for i in V if i != j) == 1 for j in J_bar)
     model.addConstrs(quicksum(x[k][j, l] for l in V if l != j) == 1 for j in J_bar)
+    model.addConstrs(quicksum(x[k][i, j] for i in V if i != j) == 0 for j in J_bar_complement)
+    model.addConstrs(quicksum(x[k][j, l] for l in V if l != j) == 0 for j in J_bar_complement)
+
     model.addConstrs(quicksum(x[k][i, j] - x[k][j, i] for j in J) == 0 for i in I)
     model._demandConstr = model.addConstrs(quicksum(t[k][i, j] for i in V if i != j)
                                            - quicksum(t[k][j, l] for l in V if l != j) == inst.beta_k_j[k][j] for j in J)
@@ -56,9 +61,15 @@ def createSecondStage(instance, k, model, variables):
     return getSecondStageObjective(inst, (r[0], y[0], r[k], y[k], x[k], t[k]))
 
 
-def initialize_first_subset(instance: Instance):
-    min_sc = min(instance.scenarios, key=lambda s: sum(instance.c_ij[i, j] * instance.beta_k_j[s][j]
-                                                       for j in instance.J for i in instance.I))
+def initSubsetEmpty(instance: Instance):
+    return []
+
+def initSubsetRandom(instance: Instance):
+    return [random.choice(instance.scenarios)]
+
+def initSubsetMaxDemand(instance: Instance):
+    min_sc = min(instance.scenarios, key=lambda s: (sum(instance.beta_k_j[s][j] >= 0 for j in instance.J),
+                                                    sum(instance.beta_k_j[s][j] for j in instance.J)))
     return [min_sc]
 
 class MasterModel(OptimizationModel):

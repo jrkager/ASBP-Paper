@@ -1,4 +1,4 @@
-from instances import toro_instances
+from applications.lrp.instances import toro_instances
 from .. import InstanceStrings
 
 import numpy as np
@@ -127,15 +127,17 @@ class Instance:
         return sc
 
     @staticmethod
-    def createInstance(n=None, K=50, sample_number = None, cost_factor=1/40, instance = None, with_nominal=False):
+    def createInstance(no_customers=None, no_warehouses=None, no_scenarios=50, sample_number = None, cost_factor=1/40, instance = None, with_nominal=False):
         """
-        creates a RecoverableInstance with K random scenarios. The scenarios are reproducible for a given K and sample number.
-        A bigger K with same sample number will always be a superset of scenarios of the smaller K with this sample number.
-        The number of customers and facilities is always given by the max number of the instance data (10 WH, 200 customers)
-        :param K: number of scenarios that should be added
+        creates a RecoverableInstance with no_scenarios random scenarios. The scenarios are reproducible for a given no_scenarios and sample number.
+        A bigger no_scenarios with same sample number will always be a superset of scenarios of the smaller no_scenarios with this sample number.
+        The number of customers and facilities is given by the max number of the instance data (10 WH, 200 customers) if not given otherwise.
+        :param no_customers: number of customers that should be added
+        :param no_warehouses: number of warehouses that should be added
+        :param no_scenarios: number of scenarios that should be added
         :param cost_factor: multiply the warehouse fixed and variable costs by this factor
         :param sample_number: number of sample. can be any number, but usually 1, 2, 3, 4 and so on. None, if system random should be used
-        :return: instance with beta_k_j indexed from 1 (nominal) on to all other scenarios. If K=50, beta_k_j will have a length of 50
+        :return: instance with beta_k_j indexed from 1 on to all other scenarios. beta_k_j will have a length of no_scenarios. Scenario 0 is nominal if with_nominal=True, otherwise no key 0 exists.
         """
         if instance is None:
             ti = toro_instances.TORO200
@@ -146,7 +148,7 @@ class Instance:
         random.seed(sample_number)
 
         beta_k_j = {}
-        for i in range(1,K+1):
+        for i in range(1,no_scenarios+1):
             beta_k_j[i] = Instance.generateScenario(ti.beta_j, ti.Q, sum(ti.C_i.values()))
         if with_nominal:
             #nominal scenario at position 0 (not used usually, but we make it available for the tests)
@@ -172,7 +174,9 @@ class Instance:
                        name=f"TORO200 (CF=1/{1/cost_factor:.0f}, s={sample_number})",
                        sample_number=sample_number)
 
-        if n is not None:
-            ret.J = ret.J[:n]
+        if no_customers is not None:
+            ret.J = ret.J[:no_customers]
+        if no_warehouses is not None:
+            ret.I = ret.I[:no_warehouses]
 
         return ret

@@ -1,4 +1,3 @@
-
 import helper
 helper.VerbosityManager.global_verbosity = 1
 
@@ -6,26 +5,29 @@ from algorithm_types import AlgorithmType
 from classes import AlgorithmParams, TimeoutException
 from algorithm import ourAlgorithm, toenAlgorithm, rodrAlgorithm
 
-from applications.bacasp.instance import Instance
-import applications.bacasp.model as model
-from applications.bacasp.heuristic import bacasp_heuristic
+from applications.lrp.instance import Instance
+import applications.lrp.model as model
 from applications import Application
 
-ships = 6
-scenarios = 16
-sample = 1
+customers = 10
+scenarios = 8
+sample_number = 1
 gap = 0.05
 timelimit = 30 * 60
 alg = "our" # or "toen" or "rodr"
 
 type = AlgorithmType() # use standard values
-inst = Instance.createInstance(N=ships, K=scenarios, instance=sample)
+inst = Instance.createInstance(no_customers=customers, no_scenarios=scenarios, sample_number=sample_number)
 appl = Application(inst=inst, MasterModel=model.MasterModel,
                    SecondStageModel=model.SecondStageModel)
+start_sc = model.initSubsetEmpty(inst)
+# start_sc = model.initSubsetRandom(inst)
+# start_sc = model.initSubsetMaxDemand(inst)
 params = AlgorithmParams(app=appl,
-                         start_sc=model.initialize_first_subset(inst),
+                         start_sc=start_sc,
                          desired_gap=gap,
-                         heuristic=bacasp_heuristic,
+                         MASTER_P=gap * 0.5,
+                         HEURTIMELIMIT=0.1,
                          total_timelimit=timelimit,
                          n_threads=1)
 
