@@ -272,7 +272,7 @@ def opt_and_update_bnd(ssmodels: list[SecondStageModelType], k, UB, LB, cbt, sta
         return
 
 
-    if ssmodels[k].status == GRB.INFEASIBLE:
+    if ssmodels[k].status == GRB.INFEASIBLE or ssmodels[k].status == GRB.INF_OR_UNBD:
         UB[k] = LB[k] = np.inf
     else:
         UB[k] = ssmodels[k].objval
@@ -288,8 +288,12 @@ def opt_and_update_bnd(ssmodels: list[SecondStageModelType], k, UB, LB, cbt, sta
 
     # there is no callback in the TOENISSEN version. We check some conditions here
     if cbt.type.is_set(types.TOENISSEN):
+        if max(UB.values()) == np.inf:
+            ssmodels[k]._ireason = types.ONLY_ONE
+            cbt.add_to_D = [max(UB, key=UB.get)]
+            cbt.message = "Worst scenario is unbounded, adding it..."
         # stop when biggest scenario is optimal and bigger than any other UB (considering float inaccuracies)
-        if max(LB.values()) + cbt.EPS >= max(UB.values()):
+        elif max(LB.values()) + cbt.EPS >= max(UB.values()):
             worst_sc = max(UB, key=UB.get)
             if worst_sc in cbt.D:
                 ssmodels[k]._ireason = types.ONLY_D
@@ -578,6 +582,7 @@ def algorithm(params: AlgorithmParams, type: AlgorithmType = None, log_header = 
                 remaining_scenarios = set(S) - set(D)
             UB = {k: np.inf for k in S}
             LB = {k: -np.inf for k in S}
+            rodr_stopping = False
 
             dm = params.app.MasterModel(params.app.inst, scenarios=D, LogFile=dlfile)
             dm.Params.Threads = params.n_threads
