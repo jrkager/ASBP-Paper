@@ -114,22 +114,25 @@ def filter_and_terminate(model, k, UB, LB, log, cbt : CBTerminationData = None):
             log(f"   Removing scenario {j} (LB[k] bigger)\n")
             rs.remove(j)
     # kick out myself
-    if UB[k] <= cbt.bound + EPS: #using + EPS bc for bacasp we have int values
-        rs.remove(k)
-        if check_terminate():
+    # only if I am not infeasible (ie infeasible and LB=UB=inf)
+    # in filter_and_terminate_cb this has not to be tested since then it is no MIPSOL
+    if UB[k] != np.inf:
+        if UB[k] <= cbt.bound + EPS: #using + EPS bc for bacasp we have int values
+            rs.remove(k)
+            if check_terminate():
+                return
+            if check_break_iter():
+                return
+            interrupt(f"   Removing scenario {k} (current sc) (z bound)\n", types.OTHER_CHOICE)
             return
-        if check_break_iter():
+        if UB[k] <= max(LB.values()) - EPS: # with - EPS I dont have to exclude k from LB. (otherwise problem when gap 0 on k)
+            rs.remove(k)
+            if check_terminate():
+                return
+            if check_break_iter():
+                return
+            interrupt(f"   Removing scenario {k} (current sc) (UB smaller)\n", types.OTHER_CHOICE)
             return
-        interrupt(f"   Removing scenario {k} (current sc) (z bound)\n", types.OTHER_CHOICE)
-        return
-    if UB[k] <= max(LB.values()) - EPS: # with - EPS I dont have to exclude k from LB. (otherwise problem when gap 0 on k)
-        rs.remove(k)
-        if check_terminate():
-            return
-        if check_break_iter():
-            return
-        interrupt(f"   Removing scenario {k} (current sc) (UB smaller)\n", types.OTHER_CHOICE)
-        return
 
     if check_terminate():
         return
@@ -451,7 +454,7 @@ def iteration(EPS, LB, UB, cbt : CBTerminationData, dm, log, params, remaining_s
                 calc_gap = abs( (f_x_tilde + worst_ub - LB_master) / (f_x_tilde + worst_ub) )
             except ZeroDivisionError:
                 calc_gap = np.inf
-            if cbt.stats.reached_gap is np.nan or calc_gap < cbt.stats.reached_gap:
+            if np.isnan(cbt.stats.reached_gap) or calc_gap < cbt.stats.reached_gap:
                 cbt.stats.reached_gap = calc_gap
 
         if ireason == ireason.TIMEOUT_EXC:
@@ -643,7 +646,7 @@ def algorithm(params: AlgorithmParams, type: AlgorithmType = None, log_header = 
                 calc_gap = abs( (f_x_tilde + max(UB.values()) - LB_master) / (f_x_tilde + max(UB.values())) )
             except ZeroDivisionError:
                 calc_gap = np.inf
-            if s.reached_gap is np.nan or calc_gap < s.reached_gap:
+            if np.isnan(s.reached_gap) or calc_gap < s.reached_gap:
                 s.reached_gap = calc_gap
 
 
